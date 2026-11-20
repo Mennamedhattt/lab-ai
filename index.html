@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NLP Playground: TF-IDF for Students</title>
+<style>
+:root{--bg:#fff7ed;--card:#ffffff;--tx:#1f1b2e;--mu:#6b6480;--ac:#6d28d9;--ac2:#f97316;--bd:#eadfce;--ok:#16a34a;--no:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15121f;--card:#1f1b2e;--tx:#f3eefc;--mu:#a79fc0;--ac:#a78bfa;--ac2:#fb923c;--bd:#352f4a;--ok:#4ade80;--no:#f87171;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15121f;--card:#1f1b2e;--tx:#f3eefc;--mu:#a79fc0;--ac:#a78bfa;--ac2:#fb923c;--bd:#352f4a;--ok:#4ade80;--no:#f87171;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 system-ui,"Segoe UI",sans-serif}
+header{padding:28px 20px 8px;text-align:center}h1{margin:0;font-size:clamp(1.6rem,5vw,2.4rem)}h1 span{color:var(--ac2)}
+header p{color:var(--mu);margin:6px 0 0}
+nav{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:14px}
+nav button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:9px 16px;border-radius:99px;cursor:pointer;font-weight:600}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+main{max-width:780px;margin:0 auto;padding:0 16px 40px}
+section{display:none;background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:20px}section.on{display:block}
+textarea,input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font:inherit}
+button.go{background:var(--ac2);color:#fff;border:0;padding:10px 18px;border-radius:10px;font-weight:700;cursor:pointer;margin-top:10px}
+.row{display:flex;align-items:center;gap:10px;margin:6px 0}.bar{height:14px;border-radius:8px;background:var(--ac);min-width:2px}
+.lbl{flex:1;font-size:.9rem}.sc{width:48px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mu)}
+.mu{color:var(--mu);font-size:.9rem}.big{font-size:1.4rem;font-weight:800}
+.opt{display:block;width:100%;text-align:left;margin:6px 0;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);cursor:pointer;font:inherit}
+.opt.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 18%,transparent)}.opt.no{border-color:var(--no);background:color-mix(in srgb,var(--no) 18%,transparent)}
+.tag{display:inline-block;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:2px 8px;margin:2px;font-size:.85rem}
+</style></head><body>
+<header><h1>NLP <span>Playground</span> 🎬</h1><p>Play with TF-IDF, similarity and movie sentiment, right in your browser</p></header>
+<nav id="nav"></nav>
+<main>
+<section id="s0"><h2>🔎 Document Similarity Lab</h2>
+<p class="mu">Edit the documents (one per line), type a query, and see TF-IDF cosine similarity rank them live.</p>
+<textarea id="docs" rows="6">The striker scored two goals in the football match
+Machine learning is a branch of artificial intelligence
+Neural networks power deep learning models
+Stock markets fell as inflation worried investors
+The team won the football championship last night</textarea>
+<input id="q" value="who won the football game" style="margin-top:8px"><button class="go" onclick="rank()">Rank documents</button>
+<div id="out" style="margin-top:14px"></div></section>
+
+<section id="s1"><h2>🎭 Sentiment Detective</h2>
+<p class="mu">A tiny word-score model (like the weights from the lab's logistic regression). Type a review!</p>
+<textarea id="rev" rows="3">Brilliant acting and a moving story, I loved it</textarea>
+<button class="go" onclick="sent()">Analyze</button><div id="so" style="margin-top:12px"></div>
+<p class="mu">Try: "not good at all", "boring waste of time". Notice how negation handling matters, as the lab shows.</p></section>
+
+<section id="s2"><h2>⚔️ BoW vs TF-IDF</h2>
+<p class="mu">Same sentence, two views. BoW counts words; TF-IDF down-weights words that appear in every document.</p>
+<input id="bs" value="the movie was a great movie with a great cast">
+<button class="go" onclick="cmp()">Compare</button><div id="co" style="margin-top:12px"></div></section>
+
+<section id="s3"><h2>🧠 Quick Quiz</h2><div id="qz"></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const tabs=["Similarity","Sentiment","BoW vs TF-IDF","Quiz"];
+tabs.forEach((t,i)=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>show(i);b.id="t"+i;$("nav").appendChild(b)});
+function show(i){tabs.forEach((_,k)=>{$("s"+k).classList.toggle("on",k==i);$("t"+k).classList.toggle("on",k==i)})}
+const STOP=new Set("a an the is are was were of in on at to and or as with by for it this that who what".split(" "));
+const tok=s=>s.toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/).filter(w=>w&&!STOP.has(w));
+function tfidf(docs){const N=docs.length,df={};docs.forEach(d=>new Set(d).forEach(w=>df[w]=(df[w]||0)+1));
+ const idf=w=>Math.log((1+N)/(1+(df[w]||0)))+1;
+ return {vec:d=>{const c={};d.forEach(w=>c[w]=(c[w]||0)+1);const v={};let n=0;for(const w in c){v[w]=c[w]*idf(w);n+=v[w]**2}n=Math.sqrt(n)||1;for(const w in v)v[w]/=n;return v},idf}}
+const cos=(a,b)=>Object.keys(a).reduce((s,w)=>s+(b[w]?a[w]*b[w]:0),0);
+function rank(){const raw=$("docs").value.split("\n").filter(x=>x.trim());const T=raw.map(tok);const m=tfidf(T);
+ const q=m.vec(tok($("q").value));const r=T.map((d,i)=>[cos(q,m.vec(d)),raw[i]]).sort((a,b)=>b[0]-a[0]);
+ $("out").innerHTML=r.map(([s,t])=>`<div class="row"><div class="lbl">${esc(t)}</div><div class="bar" style="width:${s*140}px"></div><div class="sc">${s.toFixed(2)}</div></div>`).join("")}
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const W={brilliant:2,masterpiece:2.5,loved:2,love:1.8,great:1.6,good:1.2,moving:1.5,amazing:2,excellent:2,fun:1.2,beautiful:1.5,best:1.8,
+ boring:-2,waste:-2.2,bad:-1.5,terrible:-2.5,awful:-2.5,worst:-2.5,predictable:-1,dull:-1.8,poor:-1.6,disappointing:-2};
+function sent(){const t=$("rev").value.toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/);let s=0,hits=[];
+ t.forEach((w,i)=>{if(W[w]){let v=W[w];if(["not","no","never"].includes(t[i-1]))v=-v;s+=v;hits.push([w,v])}});
+ const p=1/(1+Math.exp(-s));
+ $("so").innerHTML=`<div class="big">${p>.5?"😀 POSITIVE":"😡 NEGATIVE"} <span class="mu">(${Math.round(p*100)}% positive)</span></div>`+hits.map(([w,v])=>`<span class="tag">${w} ${v>0?"+":""}${v}</span>`).join("")}
+function cmp(){const base=["the movie was great","the movie was boring","the film was a movie about a hero","the movie had a great cast"].map(tok);
+ const s=tok($("bs").value);const all=base.concat([s]);const m=tfidf(all);const v=m.vec(s);const c={};s.forEach(w=>c[w]=(c[w]||0)+1);
+ const mx=Math.max(...Object.values(c)),mt=Math.max(...Object.values(v));
+ const rows=(o,m2)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([w,x])=>`<div class="row"><div class="lbl">${w}</div><div class="bar" style="width:${x/m2*200}px"></div><div class="sc">${x.toFixed(2)}</div></div>`).join("");
+ $("co").innerHTML=`<b>BoW counts</b>${rows(c,mx)}<b>TF-IDF weights</b>${rows(v,mt)}<p class="mu">"movie" is frequent in every document, so TF-IDF shrinks it, while rarer words such as "cast" stand out.</p>`}
+const Q=[["What does IDF measure?",["How often a word is in one document","How rare a word is across all documents","Document length"],1],
+["Cosine similarity of 1 means…",["Documents point in the same direction","No shared words","Equal length"],0],
+["Which word should we NOT remove as a stop-word for sentiment?",["the","not","and"],1],
+["Which is fit on the TRAIN set only?",["The vectorizer","The test labels","Neither"],0],
+["Why do bigrams help?",["They capture phrases like 'not good'","They shrink the vocabulary","They remove stop-words"],0]];
+let score=0,done=0;
+$("qz").innerHTML=Q.map((q,i)=>`<p><b>${i+1}. ${q[0]}</b></p>`+q[1].map((o,j)=>`<button class="opt" data-q="${i}" data-j="${j}">${o}</button>`).join("")).join("")+'<p class="big" id="res"></p>';
+$("qz").addEventListener("click",e=>{const b=e.target.closest(".opt");if(!b||b.dataset.done)return;const i=+b.dataset.q,j=+b.dataset.j;
+ document.querySelectorAll(`[data-q="${i}"]`).forEach(x=>x.dataset.done=1);
+ b.classList.add(j==Q[i][2]?"ok":"no");if(j==Q[i][2])score++;else document.querySelector(`[data-q="${i}"][data-j="${Q[i][2]}"]`).classList.add("ok");
+ if(++done==Q.length)$("res").textContent=`Score: ${score}/${Q.length} ${score>=4?"🏆":"💪"}`});
+show(0);rank();sent();cmp();
+</script></body></html>
